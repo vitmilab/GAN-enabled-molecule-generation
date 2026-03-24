@@ -224,26 +224,57 @@ with torch.no_grad():
 print("Synthetic data generated:", synthetic_features.shape, "Label counts:", np.bincount(synthetic_labels))
 
 # -----------------------
-# COMBINE + STANDARDIZE
+# SPLIT REAL DATA FIRST (CRITICAL FIX)
 # -----------------------
-X_combined = np.vstack([X_norm, synthetic_features])
-y_combined = np.concatenate([y, synthetic_labels])
-perm = np.random.RandomState(SEED).permutation(X_combined.shape[0])
-X_combined, y_combined = X_combined[perm], y_combined[perm]
+X_train_real, X_test, y_train_real, y_test = train_test_split(
+    X_norm, y, test_size=0.2, stratify=y, random_state=SEED
+)
 
+# Further split training into train + validation
+X_train_real, X_val_real, y_train_real, y_val_real = train_test_split(
+    X_train_real, y_train_real, test_size=0.25, stratify=y_train_real, random_state=SEED
+)
+
+print(f"Real splits -> Train: {X_train_real.shape}, Val: {X_val_real.shape}, Test: {X_test.shape}")
+
+# -----------------------
+# MATCH SYNTHETIC SIZE TO TRAINING SET
+# -----------------------
+
+num_syn = len(X_train_real)  # match training size
+
+synthetic_labels = np.array([0]*(num_syn//2) + [1]*(num_syn//2))
+rng.shuffle(synthetic_labels)
+
+with torch.no_grad():
+    set_global_seed(SEED + 999)
+    z_syn = torch.randn(num_syn, latent_dim, device=device)
+    gen_labels_t = torch.tensor(synthetic_labels, dtype=torch.long, device=device)
+    synthetic_features = gen(z_syn, gen_labels_t).cpu().numpy()
+
+# Combine
+X_train_combined = np.vstack([X_train_real, synthetic_features])
+y_train_combined = np.concatenate([y_train_real, synthetic_labels])
+
+# Shuffle training data
+perm = np.random.RandomState(SEED).permutation(X_train_combined.shape[0])
+X_train_combined = X_train_combined[perm]
+y_train_combined = y_train_combined[perm]
+
+# -----------------------
+# STANDARDIZATION (FIT ONLY ON TRAINING)
+# -----------------------
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X_combined)
+X_train = scaler.fit_transform(X_train_combined)
+X_val = scaler.transform(X_val_real)
+X_test = scaler.transform(X_test)
+
+y_train = y_train_combined
+
 joblib.dump(scaler, os.path.join(MODEL_DIR, "scaler.joblib"))
 
-# -----------------------
-# SPLIT DATA (3:1:1)
-# -----------------------
-X_temp, X_test, y_temp, y_test = train_test_split(
-    X_scaled, y_combined, test_size=0.2, stratify=y_combined, random_state=SEED)
-X_train, X_val, y_train, y_val = train_test_split(
-    X_temp, y_temp, test_size=0.25, stratify=y_temp, random_state=SEED)
-
-print(f"Splits -> Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
+print(f"Final splits -> Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
+print(f"Train labels: {y_train.shape}, Val labels: {y_val_real.shape}, Test labels: {y_test.shape}")
 
 # -----------------------
 # XGBoost TRAINING (Deterministic)
@@ -269,9 +300,10 @@ clf = XGBClassifier(**xgb_params)
 eval_results = {}
 clf.fit(
     X_train, y_train,
-    eval_set=[(X_train, y_train), (X_val, y_val)],
+    eval_set=[(X_train, y_train), (X_val, y_val_real)],
     verbose=False
 )
+
 eval_results = clf.evals_result()
 
 # Plot and save figure
@@ -352,3 +384,4 @@ print(f"GAN epochs: {gan_epochs}")
 print(f"Train/Val/Test sizes: {X_train.shape[0]}/{X_val.shape[0]}/{X_test.shape[0]}")
 print(f"Final test accuracy: {acc_test:.4f}")
 print("All outputs are reproducible and saved in:", MODEL_DIR)
+
