@@ -296,6 +296,21 @@ xgb_params = dict(
 xgb_params['eval_metric'] = 'logloss'
 clf = XGBClassifier(**xgb_params)
 
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
+
+cv_scores = cross_val_score(
+    clf,
+    scaler.transform(X_train_real),   # ONLY real
+    y_train_real,
+    cv=cv,
+    scoring='accuracy',
+    n_jobs=1
+)
+
+print(f"\nCross-validation Accuracy: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+
 # Fit model and track logloss
 eval_results = {}
 clf.fit(
@@ -305,22 +320,6 @@ clf.fit(
 )
 
 eval_results = clf.evals_result()
-
-# 5 - fold Cross validation
-from sklearn.model_selection import StratifiedKFold, cross_val_score
-
-cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
-
-cv_scores = cross_val_score(
-    clf,
-    X_train,
-    y_train,
-    cv=cv,
-    scoring='accuracy',
-    n_jobs=1
-)
-
-print(f"\nCross-validation Accuracy: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
 
 # Plot and save figure
 
@@ -390,27 +389,6 @@ if os.path.exists(EXTERNAL_CSV):
     print(f"Saved external predictions with probabilities for {df_ext.shape[0]} compounds.")
 else:
     print("External file not found — skipping.")
-from sklearn.metrics import matthews_corrcoef
-
-mcc = matthews_corrcoef(y_test, y_pred_test)
-print(f"MCC: {mcc:.4f}")
-
-from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
-
-acc = accuracy_score(y_test, y_pred_test)
-precision = precision_score(y_test, y_pred_test)
-recall = recall_score(y_test, y_pred_test)
-f1 = f1_score(y_test, y_pred_test)
-roc_auc = roc_auc_score(y_test, y_prob_test)
-mcc = matthews_corrcoef(y_test, y_pred_test)
-
-print("\nTEST PERFORMANCE (COMPREHENSIVE)")
-print(f"Accuracy: {acc:.4f}")
-print(f"Precision: {precision:.4f}")
-print(f"Recall: {recall:.4f}")
-print(f"F1-score: {f1:.4f}")
-print(f"ROC-AUC: {roc_auc:.4f}")
-print(f"MCC: {mcc:.4f}")
 
 # -----------------------
 # SUMMARY
@@ -421,4 +399,3 @@ print(f"GAN epochs: {gan_epochs}")
 print(f"Train/Val/Test sizes: {X_train.shape[0]}/{X_val.shape[0]}/{X_test.shape[0]}")
 print(f"Final test accuracy: {acc_test:.4f}")
 print("All outputs are reproducible and saved in:", MODEL_DIR)
-
