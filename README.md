@@ -42,5 +42,7 @@ pip install -r requirements.txt
 Run the pipeline in the following order:
 
 python gan.py              # Train cGAN and generate synthetic data
+
 python gan_validation.py   # Inspect GAN training performance
+
 python evaluation.py       # Train XGBoost model and evaluate performance
