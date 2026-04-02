@@ -36,5 +36,11 @@ conda create -n gan_env python=3.9
 conda activate gan_env
 
 ## Install dependencies:
-
 pip install -r requirements.txt
+
+## Usage
+Run the pipeline in the following order:
+
+python gan.py              # Train cGAN and generate synthetic data
+python gan_validation.py   # Inspect GAN training performance
+python evaluation.py       # Train XGBoost model and evaluate performance
