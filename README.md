@@ -33,6 +33,7 @@ The pipeline integrates:
 - Joblib
 
 conda create -n gan_env python=3.9
+
 conda activate gan_env
 
 ## Install dependencies:
